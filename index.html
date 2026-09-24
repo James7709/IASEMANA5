@@ -35,5 +35,37 @@ const goodColors=['#d9272e','#73ad35','#e34232','#9e2030','#e6bb24','#f08a35','#
 const badColors=['#7d3f25','#694b2d','#8b4a32','#5c3928','#70452f','#4b3529','#7f3c28','#65402c','#533d2c','#714a35'];
 goodColors.forEach((c,i)=>document.querySelector('#samplesGood').appendChild(makeSample(c,'Buen estado',i)));
 badColors.forEach((c,i)=>document.querySelector('#samplesBad').appendChild(makeSample(c,'Mal estado',i)));
-analyze.onclick=()=>{if(!current)return;const img=new Image();img.crossOrigin='anonymous';img.onload=()=>{const c=document.createElement('canvas'),s=220,k=Math.min(s/img.width,s/img.height,1);c.width=Math.max(1,img.width*k);c.height=Math.max(1,img.height*k);const x=c.getContext('2d');x.drawImage(img,0,0,c.width,c.height);const d=x.getImageData(0,0,c.width,c.height).data;let dark=0,brown=0,red=0,green=0,t=d.length/4;for(let i=0;i<d.length;i+=4){let r=d[i],g=d[i+1],b=d[i+2],m=Math.max(r,g,b);if(m<75)dark++;if(r>55&&r>g*1.25&&r>b*1.15&&g<155)brown++;if(r>120&&r>g*1.35&&r>b*1.25)red++;if(g>r*1.15&&g>b*1.05)green++}let decay=Math.min(1,dark/t*1.5+brown/t*.85),label='Resultado incierto',cls='uncertain',conf=.55,icon='⚠️';if(decay>.16){label='Posibles señales de deterioro';cls='bad';icon='🔴';conf=Math.min(.94,.60+decay*.32)}else if((red+green)/t>.08){label='Apariencia de buen estado';cls='good';icon='🟢';conf=Math.min(.94,.64+(red+green)/t*.35)}result.hidden=false;result.innerHTML='<span class="badge '+cls+'">'+icon+' '+label+'</span><h3>Confianza estimada: '+Math.round(conf*100)+'%</h3><div class="bar"><div class="fill" style="width:'+Math.round(conf*100)+'%"></div></div><p class="note">Resultado visual aproximado. La luz, el fondo y la cámara pueden afectar la estimación.</p>'};img.onerror=()=>{result.hidden=false;result.innerHTML='<span class="badge uncertain">⚠️ No se pudo procesar esta imagen de muestra</span><p class="note">Puedes subir una foto desde tu computadora para analizarla.</p>'};img.src=current.remote?current.path:url};
+analyze.onclick=()=>{
+ if(!current)return;
+ const img=new Image();img.onload=()=>{
+  const c=document.createElement('canvas'),w=220,h=Math.max(1,Math.round(img.height*(220/img.width)));c.width=w;c.height=h;
+  const ctx=c.getContext('2d');ctx.drawImage(img,0,0,w,h);
+  const d=ctx.getImageData(0,0,w,h).data;
+  let dark=0,brown=0,green=0,red=0,healthy=0,total=0;
+  const x0=Math.floor(w*.12),x1=Math.ceil(w*.88),y0=Math.floor(h*.08),y1=Math.ceil(h*.92);
+  for(let y=y0;y<y1;y++)for(let x=x0;x<x1;x++){
+   const i=(y*w+x)*4,r=d[i],g=d[i+1],b=d[i+2],mx=Math.max(r,g,b),mn=Math.min(r,g,b);
+   total++;
+   if(mx<65)dark++;
+   if(r>65&&r>g*1.22&&r>b*1.12&&g<170)brown++;
+   if(g>r*1.12&&g>b*1.04&&g>65)green++;
+   if(r>115&&r>g*1.22&&r>b*1.18)red++;
+  }
+  const darkRatio=dark/total,brownRatio=brown/total,redRatio=red/total,greenRatio=green/total;
+  const decay=Math.min(1,darkRatio*.55+brownRatio*.75);
+  const healthyRatio=Math.min(1,redRatio+greenRatio);
+  let label='Resultado incierto',cls='uncertain',confidence=.55;
+  if(decay>.30 && healthyRatio<.22){
+    label='Mal estado';cls='bad';confidence=Math.min(.95,.68+decay*.25);
+  }else if(healthyRatio>.055 && decay<.42){
+    label='Buen estado';cls='good';confidence=Math.min(.96,.68+healthyRatio*.35+(1-decay)*.10);
+  }else if(decay>.48){
+    label='Mal estado';cls='bad';confidence=Math.min(.93,.65+decay*.25);
+  }
+  result.hidden=false;
+  result.innerHTML='<span class="badge '+cls+'">'+label+'</span><h3 style="margin:12px 0 4px">Confianza estimada: '+Math.round(confidence*100)+'%</h3><div class="bar"><div class="fill" style="width:'+Math.round(confidence*100)+'%"></div></div><p class="note">La detección fue ajustada para considerar mejor manzanas rojas, verdes y amarillas y reducir falsos resultados causados por fondos oscuros. La luz y la cámara todavía pueden afectar la estimación.</p>';
+ };
+ img.onerror=()=>{result.hidden=false;result.innerHTML='<span class="badge uncertain">Resultado incierto</span><p class="note">No se pudo procesar la imagen.</p>'};
+ img.src=current.sample?preview.src:(current.remote?current.path:url);
+};
 </script></body></html>
